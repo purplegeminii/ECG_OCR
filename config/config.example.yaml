@@ -1,0 +1,84 @@
+# ECG OCR Pipeline Configuration
+# Copy this file to config.yaml and edit as needed
+
+# ─── Model Settings ───────────────────────────────────────────────────────────
+model:
+  name: ecg_meter                    # Name for your custom model
+  base_model: eng                    # Tesseract base model to fine-tune from
+  max_iterations: 10000              # Training iterations (increase for larger datasets)
+  learning_rate: 0.0001              # LSTM learning rate
+  target_cer: 0.02                   # Target character error rate (2%)
+  checkpoint_every: 1000             # Save checkpoint every N iterations
+  tessdata_best_dir: ~/tessdata_best # Path to tessdata_best
+
+# ─── Training Split ───────────────────────────────────────────────────────────
+training:
+  split:
+    train: 0.80
+    validation: 0.10
+    test: 0.10
+  augmentation_factor: 5             # How many augmented copies per real image
+  min_samples_for_training: 100      # Warn if below this number
+  random_seed: 42
+
+# ─── Preprocessing ────────────────────────────────────────────────────────────
+preprocessing:
+  target_width: 1000                 # Resize images to this width if smaller
+  target_dpi: 300                    # Target DPI for Tesseract
+  adaptive_thresh_block_size: 11     # Must be odd
+  adaptive_thresh_c: 2               # Constant subtracted from mean
+  denoise_strength: 10               # FastNlMeansDenoising strength
+  deskew: true                       # Auto-deskew images
+  extract_roi: true                  # Try to extract meter display ROI
+  roi_padding: 20                    # Pixels of padding around ROI
+  min_image_width: 400               # Images smaller than this are flagged
+
+# ─── Augmentation ─────────────────────────────────────────────────────────────
+augmentation:
+  brightness_limit: 0.3
+  contrast_limit: 0.3
+  blur_limit: 3
+  noise_variance: 0.01
+  rotation_limit: 5                  # Max rotation in degrees
+  perspective_scale: [0.02, 0.05]
+  apply_morphological: true          # Simulate ink degradation
+
+# ─── OCR / Inference ──────────────────────────────────────────────────────────
+ocr:
+  psm: 6                             # Page segmentation mode (6 = uniform block)
+  oem: 1                             # OCR engine mode (1 = LSTM only)
+  whitelist: "0123456789.-kWhKWH/ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz"
+  confidence_threshold: 60           # Below this → flagged for human review
+  use_custom_model: true             # Use fine-tuned model vs base eng
+
+# ─── Paths ────────────────────────────────────────────────────────────────────
+paths:
+  raw_images: raw_images/
+  preprocessed: preprocessed/
+  ground_truth: ground_truth/
+  training_data: training_data/
+  eval_data: eval_data/
+  augmented: augmented/
+  results: results/
+  models: models/
+  logs: logs/
+
+# ─── ECG Domain Rules ─────────────────────────────────────────────────────────
+domain:
+  # Expected field formats (regex patterns)
+  meter_reading_pattern: "\\b\\d{4,6}(?:\\.\\d{1,2})?\\b"
+  account_number_pattern: "\\b\\d{10,13}\\b"
+  meter_serial_pattern: "[A-Z0-9]{8,15}"
+  date_pattern: "\\d{2}[/-]\\d{2}[/-]\\d{2,4}"
+
+  # Meter brands in ECG network (affects font variation)
+  meter_brands:
+    - Actaris
+    - Landis+Gyr
+    - Conlog
+    - Hexing
+    - Itron
+
+  # Reading sanity bounds (flag readings outside these)
+  min_valid_reading: 0
+  max_valid_reading: 999999
