@@ -12,7 +12,8 @@ MODEL_NAME   = "ecg_meter"
 TESS_CONFIG = (
     f"--oem 1 --psm 6 "
     f"--tessdata-dir {TESSDATA_DIR} "
-    f"-c tessedit_char_whitelist=0123456789.-kWhKWH/ "
+    # f"-c tessedit_char_whitelist=0123456789.-kWhKWH/ "
+    f"-c tessedit_char_whitelist=0123456789.-kWhKWH/ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz "
 )
 
 def preprocess(image_bytes: bytes) -> np.ndarray:
@@ -40,6 +41,7 @@ def extract_reading(text: str) -> dict:
     """Pull structured fields out of raw OCR text."""
     return {
         "meter_readings":  re.findall(r"\b\d{4,6}(?:\.\d{1,2})?\b", text),
+        "meter_serial":    re.findall(r"[A-Z0-9]{8,15}", text),
         "account_numbers": re.findall(r"\b\d{10,13}\b", text),
         "dates":           re.findall(r"\d{2}[/-]\d{2}[/-]\d{2,4}", text),
     }
@@ -64,6 +66,7 @@ def run_ocr(image_bytes: bytes) -> dict:
     return {
         "raw_text":        raw_text,
         "meter_readings":  fields["meter_readings"],
+        "meter_serial":    fields["meter_serial"],
         "account_numbers": fields["account_numbers"],
         "dates":           fields["dates"],
         "confidence":      mean_conf,
