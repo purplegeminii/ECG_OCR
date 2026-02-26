@@ -195,3 +195,43 @@ Lower `learning_rate` to `0.00005` or reduce `max_iterations` if overfitting.
 **Tesseract not found**
 Run `bash scripts/install_dependencies.sh` and ensure `/usr/bin/tesseract` is
 on your PATH.
+
+## 📊 System Overview
+
+This project follows a structured OCR pipeline:
+
+- Image preprocessing
+- Annotation & augmentation
+- Model training (tesstrain)
+- Inference & evaluation
+
+Detailed diagrams are available in `/docs`.
+
+## User Flow
+Shows how a user uses your ECG OCR system end-to-end.
+
+```mermaid
+flowchart TD
+    U[User / Researcher]
+
+    U --> A[Put Images in raw_images/]
+    A --> B[01_preprocess.py]
+    B --> C[preprocessed/]
+
+    C --> D[02_annotate.py]
+    D --> E[ground_truth/]
+
+    E --> F[03_augment.py]
+    F --> G[augmented/]
+
+    G --> H[04_prepare_training_data.py]
+
+    H --> I[05_run_training.sh]
+    I --> J[models/]
+
+    J --> K[07_inference.py]
+    K --> L[results/]
+
+    L --> M[06_evaluate.py]
+    M --> N[Reports / Plots]
+```
