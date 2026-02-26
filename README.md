@@ -32,6 +32,10 @@ ecg-ocr-project/
 ├── tesstrain/           # git submodule — owns all training internals
 │   └── data/
 │       └── ecg_meter-ground-truth/  # ← 04_prepare_training_data.py writes here
+├── ecg-meter-api/       # Production REST API
+│   ├── app.py           # Flask application
+│   ├── ocr.py           # OCR engine wrapper
+│   └── model/           # Trained model (.traineddata)
 ├── scripts/             # All pipeline scripts
 ├── config/              # YAML configs
 ├── logs/                # Training logs, CER curves
@@ -127,6 +131,72 @@ Production-ready OCR with:
 - Post-processing validation (regex + business rules)
 - Confidence thresholding & human review flagging
 - CSV/JSON output
+
+### Phase 8 — API Deployment
+Production REST API for real-time OCR:
+- Flask-based HTTP endpoint
+- Image upload via POST multipart/form-data
+- Automatic preprocessing pipeline
+- JSON response with readings, confidence scores
+- Health check endpoint
+
+---
+
+## Production API Usage
+
+The `ecg-meter-api/` directory contains a lightweight Flask API for production deployment.
+
+### Starting the API
+
+```bash
+cd ecg-meter-api
+python app.py
+```
+
+The API will start on `http://127.0.0.1:5000`
+
+### API Endpoints
+
+**POST /read-meter**
+- Upload meter image and get OCR results
+- **Content-Type**: `multipart/form-data`
+- **Field name**: `image`
+- **Supported formats**: .jpg, .jpeg, .png, .tif, .tiff, .bmp
+- **Max size**: 10MB
+
+**Example using curl:**
+```bash
+curl -X POST http://127.0.0.1:5000/read-meter \
+  -F "image=@/path/to/meter.jpg"
+```
+
+**Response:**
+```json
+{
+  "raw_text": "00005",
+  "meter_readings": ["00005"],
+  "meter_serial": [],
+  "account_numbers": [],
+  "dates": [],
+  "confidence": 95.2,
+  "flagged": false
+}
+```
+
+**GET /health**
+- Health check endpoint
+- Returns: `{"status": "ok"}`
+
+### Deploying to Production
+
+For production deployment, use a WSGI server like Gunicorn:
+
+```bash
+pip install gunicorn
+gunicorn -w 4 -b 0.0.0.0:8000 app:app
+```
+
+Or use Docker (see `ecg-meter-api/Dockerfile` if available).
 
 ---
 
@@ -229,9 +299,13 @@ flowchart TD
     H --> I[05_run_training.sh]
     I --> J[models/]
 
-    J --> K[07_inference.py]
-    K --> L[results/]
+    J --> K{Choose Inference Method}
+    K -->|Batch Processing| L[07_inference.py]
+    K -->|Production API| M[ecg-meter-api/]
+    
+    L --> N[results/]
+    M --> O[Real-time OCR via HTTP]
 
-    L --> M[06_evaluate.py]
-    M --> N[Reports / Plots]
+    N --> P[06_evaluate.py]
+    P --> Q[Reports / Plots]
 ```
