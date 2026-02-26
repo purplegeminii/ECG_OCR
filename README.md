@@ -14,6 +14,7 @@ meter reading images.
 5. [Scripts Reference](#scripts-reference)
 6. [Evaluation](#evaluation)
 7. [Troubleshooting](#troubleshooting)
+8. [System Overview](#-system-overview)
 
 ---
 
@@ -356,7 +357,7 @@ This project follows a structured OCR pipeline:
 
 Detailed diagrams are available in `/docs`.
 
-## User Flow
+### User Flow
 Shows how a user uses your ECG OCR system end-to-end.
 
 ```mermaid
