@@ -4,16 +4,19 @@ What happens to each ECG image.
 ```mermaid
 flowchart TD
 
-    A[Raw ECG Image] --> B[Resize / Crop]
-    B --> C[Grayscale]
-    C --> D[Noise Removal]
-    D --> E[Thresholding]
-    E --> F[Deskew]
+    A[Raw ECG Image] --> B[Grayscale]
+    B --> C[ROI Extraction]
+    C --> D[Perspective Correction]
+    D --> E[Deskew]
+    E --> F[Resize to 300+ DPI]
+    
+    F --> G[Noise Removal]
+    G --> H[Adaptive Thresholding]
 
-    F --> G[Save as TIFF]
-    G --> H[Tesseract OCR]
+    H --> I[Save as TIFF]
+    I --> J[Tesseract OCR]
 
-    H --> I[Raw Text]
-    I --> J[Post-processing]
-    J --> K[Final Output]
+    J --> K[Raw Text]
+    K --> L[Post-processing / Cleanup]
+    L --> M[Final Output]
 ```

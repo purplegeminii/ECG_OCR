@@ -406,7 +406,7 @@ def evaluate_model(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate ECG OCR Model")
-    parser.add_argument("--test-dir",  default="raw_images/new/",    help="Test images directory")
+    parser.add_argument("--test-dir",  default="eval_data/",    help="Test images directory")
     parser.add_argument("--gt-dir",    default="ground_truth/", help="Ground truth directory")
     parser.add_argument("--model",     help="Path to .traineddata model file")
     parser.add_argument("--lang",      default="eng",          help="Tesseract language code")

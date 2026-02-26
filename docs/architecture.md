@@ -22,10 +22,20 @@ flowchart LR
     PREP2 --> TRAIN[tesstrain/ + 05_run_training.sh]
     TRAIN --> MODEL[models/]
 
-    MODEL --> INF[scripts/07_inference.py]
+    MODEL --> CHOICE{Inference Method}
+    
+    CHOICE -->|Batch Processing| INF[scripts/07_inference.py]
+    CHOICE -->|Production API| API[ecg-meter-api/]
+    
     INF --> RES[results/]
+    API --> HTTP[HTTP Response]
 
     RES --> EVAL[scripts/06_evaluate.py]
+    EVAL --> CORR{Errors Found?}
+    
+    CORR -->|Yes| FIX[scripts/08_iterative_correction.py]
+    FIX --> CORRECTIONS[corrections/]
+    CORRECTIONS -->|Merge & Retrain| TRAIN
 ```
 
 ## Script Dependency Diagram
@@ -45,4 +55,7 @@ flowchart TD
     C[08_iterative_correction.py] --> U
 
     TRAIN[05_run_training.sh] --> TES[tesstrain/]
+    
+    API_APP[ecg-meter-api/app.py] --> API_OCR[ecg-meter-api/ocr.py]
+    API_OCR --> MODEL[models/ecg_meter.traineddata]
 ```

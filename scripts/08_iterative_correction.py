@@ -15,9 +15,9 @@ Workflow:
   5. Re-evaluate and compare
 
 Usage:
-    python scripts/08_iterative_correction.py --eval-dir eval_data/ --rounds 3
+    python scripts/08_iterative_correction.py --eval-dir eval_data/ --rounds 3 --retrain
     python scripts/08_iterative_correction.py --find-errors --threshold 0.1
-    python scripts/08_iterative_correction.py --add-corrections corrections/ --retrain
+    python scripts/08_iterative_correction.py --corrections corrections/ --retrain --rounds 3
 """
 from __future__ import annotations
 
@@ -322,7 +322,7 @@ def print_iteration_progress(log_path: str = "logs/iteration_log.csv") -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Iterative OCR Error Correction")
-    parser.add_argument("--eval-dir",     default="raw_images/new/",     help="Evaluation images dir")
+    parser.add_argument("--eval-dir",     default="eval_data/",     help="Evaluation images dir")
     parser.add_argument("--gt-dir",       default="ground_truth/",  help="Ground truth dir")
     parser.add_argument("--corrections",  default="corrections/",   help="Corrections output dir")
     parser.add_argument("--model-dir",    help="Custom model tessdata dir")

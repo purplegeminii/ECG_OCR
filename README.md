@@ -25,6 +25,8 @@ ecg-ocr-project/
 ├── preprocessed/        # Cleaned/deskewed images ready for OCR
 ├── ground_truth/        # .gt.txt label files (paired with .tif)
 ├── augmented/           # Synthetically augmented images
+├── eval_data/           # Dedicated evaluation/test set (optional)
+├── corrections/         # Human-corrected samples for iterative retraining
 ├── results/             # Inference outputs, CSV reports, test_set.txt
 ├── models/
 │   └── ecg_meter/
@@ -79,7 +81,11 @@ bash scripts/05_run_training.sh
 # 9. Evaluate the model
 python scripts/06_evaluate.py --model models/ecg_meter/tessdata/ecg_meter.traineddata
 
-# 10. Run inference on new images
+# 10. (Optional) Iterative error correction
+python scripts/08_iterative_correction.py --find-errors --threshold 0.1
+python scripts/08_iterative_correction.py --corrections corrections/ --retrain --rounds 3
+
+# 11. Run inference on new images
 python scripts/07_inference.py --input raw_images/new/ --output results/
 ```
 
@@ -131,6 +137,16 @@ Production-ready OCR with:
 - Post-processing validation (regex + business rules)
 - Confidence thresholding & human review flagging
 - CSV/JSON output
+
+### Phase 7.5 — Iterative Error Correction (Optional)
+Continuous model improvement through error analysis:
+- Identify worst-performing samples from evaluation
+- Present failures for human review and correction
+- Add corrected samples to `corrections/` directory
+- Merge corrections into training set
+- Trigger incremental retraining cycles
+- Re-evaluate and track CER improvements
+- Repeat until target accuracy achieved
 
 ### Phase 8 — API Deployment
 Production REST API for real-time OCR:
@@ -248,6 +264,69 @@ ocr:
 
 ---
 
+## Evaluation
+
+The `06_evaluate.py` script provides comprehensive model evaluation with detailed metrics.
+
+### Basic Usage
+
+```bash
+# Evaluate with default settings (uses eval_data/ directory)
+python scripts/06_evaluate.py --model models/ecg_meter/tessdata/ecg_meter.traineddata
+
+# Use augmented dataset for evaluation (if no separate eval_data/)
+python scripts/06_evaluate.py \
+  --model models/ecg_meter/tessdata/ecg_meter.traineddata \
+  --test-dir augmented/
+
+# Compare custom model against base eng model
+python scripts/06_evaluate.py \
+  --model models/ecg_meter/tessdata/ecg_meter.traineddata \
+  --test-dir augmented/ \
+  --compare
+```
+
+**Note:** Use `eval_data/` for a dedicated holdout test set, or use `augmented/` if you want to evaluate on your augmented training data.
+
+### Command Reference
+
+```
+--test-dir DIR      Test images directory (default: eval_data/)
+--gt-dir DIR        Ground truth directory (default: ground_truth/)
+--model FILE        Path to .traineddata model file
+--lang LANG         Tesseract language code (default: eng)
+--output DIR        Output directory for reports (default: results/)
+--compare           Compare against base eng model
+--config FILE       Path to config.yaml (default: config/config.yaml)
+```
+
+### Metrics Computed
+
+- **Character Error Rate (CER)**: Levenshtein distance at character level
+- **Word Error Rate (WER)**: Levenshtein distance at word level
+- **Field-level accuracy**: Meter reading, account number, date extraction
+- **Per-character confusion matrix**: Which characters are commonly misread
+- **Confidence score distribution**: OCR confidence levels
+
+### Output Files
+
+All evaluation results are saved to `results/`:
+- `evaluation_report.csv`: Detailed per-image metrics
+- `confusion_matrix.png`: Character error visualization
+- `cer_distribution.png`: CER histogram across test set
+- Console summary with rich tables
+
+### Interpreting Results
+
+| CER Range | Quality | Action |
+|-----------|---------|--------|
+| < 1% | Excellent | Deploy to production |
+| 1-3% | Good | Optional iterative correction |
+| 3-5% | Acceptable | Run iterative correction |
+| > 5% | Poor | Review preprocessing & add more training data |
+
+---
+
 ## Troubleshooting
 
 **Low accuracy on specific meter brands**
@@ -307,5 +386,12 @@ flowchart TD
     M --> O[Real-time OCR via HTTP]
 
     N --> P[06_evaluate.py]
-    P --> Q[Reports / Plots]
+    P --> Q{Acceptable CER?}
+    
+    Q -->|No| R[08_iterative_correction.py]
+    R --> S[corrections/]
+    S -->|Merge & Retrain| G
+    
+    Q -->|Yes| T[Reports / Plots]
+    T --> U
 ```
