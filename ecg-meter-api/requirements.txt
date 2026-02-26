@@ -1,0 +1,14 @@
+# Web framework
+flask>=3.0.0
+gunicorn>=21.2.0                # production WSGI server
+
+# OCR
+pytesseract>=0.3.10
+
+# Image processing
+opencv-python-headless>=4.7.0   # headless: no GUI deps needed on a server
+numpy>=1.24.0
+Pillow>=9.0.0                   # fallback image handling for pytesseract
+
+# Environment / config
+python-dotenv>=1.0.0
