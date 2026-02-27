@@ -26,7 +26,7 @@ ecg-ocr-project/
 ├── preprocessed/        # Cleaned/deskewed images ready for OCR
 ├── ground_truth/        # .gt.txt label files (paired with .tif)
 ├── augmented/           # Synthetically augmented images
-├── eval_data/           # Dedicated evaluation/test set (optional)
+├── eval_data/           # Holdout test set (auto-populated by 04_prepare_training_data.py)
 ├── corrections/         # Human-corrected samples for iterative retraining
 ├── results/             # Inference outputs, CSV reports, test_set.txt
 ├── models/
@@ -68,12 +68,16 @@ cp config/config.example.yaml config/config.yaml
 python scripts/01_preprocess.py --input raw_images/ --output preprocessed/
 
 # 5. Label your images
+# Option A: GUI-based (Label Studio)
+python scripts/02_annotate.py --launch --images preprocessed/
+# Option B: CLI-based (quick for small datasets)
 python scripts/02_annotate.py --manual --images preprocessed/ --output ground_truth/
 
 # 6. Augment the dataset
 python scripts/03_augment.py --input preprocessed/ --output augmented/ --factor 5
 
 # 7. Copy pairs into tesstrain's ground-truth directory
+# This also splits data: train+val → tesstrain/, test → eval_data/
 python scripts/04_prepare_training_data.py
 
 # 8. Run fine-tuning via tesstrain
@@ -81,6 +85,9 @@ bash scripts/05_run_training.sh
 
 # 9. Evaluate the model
 python scripts/06_evaluate.py --model models/ecg_meter/tessdata/ecg_meter.traineddata
+
+# (Optional) Add additional test images to eval_data/
+python scripts/add_to_eval_data.py --image new_meter.jpg --interactive
 
 # 10. (Optional) Iterative error correction
 python scripts/08_iterative_correction.py --find-errors --threshold 0.1
@@ -103,7 +110,8 @@ Converts raw meter photos into clean, normalised images:
 
 ### Phase 2 — Annotation
 Ground truth labeling with validation:
-- Label Studio integration
+- Label Studio GUI integration (`--launch` mode) for browser-based annotation
+- Built-in CLI annotation tool (`--manual` mode) for quick terminal-based labeling
 - Automatic format conversion to `.gt.txt`
 - Quality checks on labels
 
@@ -117,7 +125,9 @@ Synthetic data generation to expand small datasets:
 ### Phase 4 — Training Data Preparation
 Converts annotated images to Tesseract-ready format:
 - Paired `.tif` + `.gt.txt` files
-- Train/validation/test split (80/10/10)
+- Train/validation/test split (80/10/10 by default)
+- Training pairs → `tesstrain/data/<model>-ground-truth/`
+- Test pairs → `eval_data/` (held out for unbiased evaluation)
 
 ### Phase 5 — Fine-Tuning
 LSTM fine-tuning from `eng` base model via tesstrain:
@@ -260,6 +270,7 @@ ocr:
 | `06_evaluate.py` | Full evaluation with metrics |
 | `07_inference.py` | Production inference pipeline |
 | `08_iterative_correction.py` | dshea89-style error correction loop |
+| `add_to_eval_data.py` | Add new images to eval_data/ for testing |
 | `install_dependencies.sh` | System + Python dependency installer |
 | `plot_training_curves.py` | Visualise CER/WER over training |
 
@@ -272,22 +283,37 @@ The `06_evaluate.py` script provides comprehensive model evaluation with detaile
 ### Basic Usage
 
 ```bash
-# Evaluate with default settings (uses eval_data/ directory)
+# Evaluate on the holdout test set (populated by 04_prepare_training_data.py)
 python scripts/06_evaluate.py --model models/ecg_meter/tessdata/ecg_meter.traineddata
-
-# Use augmented dataset for evaluation (if no separate eval_data/)
-python scripts/06_evaluate.py \
-  --model models/ecg_meter/tessdata/ecg_meter.traineddata \
-  --test-dir augmented/
 
 # Compare custom model against base eng model
 python scripts/06_evaluate.py \
   --model models/ecg_meter/tessdata/ecg_meter.traineddata \
-  --test-dir augmented/ \
   --compare
 ```
 
-**Note:** Use `eval_data/` for a dedicated holdout test set, or use `augmented/` if you want to evaluate on your augmented training data.
+**Note:** The `eval_data/` directory contains your held-out test set (10% of data by default), which was never seen during training. This gives an unbiased estimate of model performance.
+
+### Adding New Test Images
+
+To test your model on completely new images (not from your original dataset):
+
+```bash
+# Add a single image (interactive annotation)
+python scripts/add_to_eval_data.py --image new_meter.jpg --interactive
+
+# Add a directory of images with existing ground truth files
+python scripts/add_to_eval_data.py \
+  --input new_test_images/ \
+  --gt-dir ground_truth_labels/
+
+# Add images without annotation (for inference testing only)
+python scripts/add_to_eval_data.py \
+  --input new_test_images/ \
+  --no-annotation
+```
+
+This preprocesses the images and saves them to `eval_data/` in the correct format (.tif + .gt.txt).
 
 ### Command Reference
 

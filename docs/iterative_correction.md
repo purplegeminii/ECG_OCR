@@ -33,7 +33,7 @@ flowchart TD
 
 ### Step 1: Identify Errors
 
-Run evaluation to find problematic images:
+Run evaluation to find problematic images in your held-out test set:
 
 ```bash
 python scripts/08_iterative_correction.py \
@@ -42,7 +42,19 @@ python scripts/08_iterative_correction.py \
   --eval-dir eval_data/
 ```
 
-This identifies all images with CER > 10%.
+This identifies all images with CER > 10%. The `eval_data/` directory contains your test set that was held out by `04_prepare_training_data.py`.
+
+**Adding External Test Images:**
+
+If you want to test on completely new images not from your original dataset:
+
+```bash
+# Add new test images with interactive annotation
+python scripts/add_to_eval_data.py --input new_meters/ --interactive
+
+# Then run error detection
+python scripts/08_iterative_correction.py --find-errors --threshold 0.1
+```
 
 ### Step 2: Run Full Correction Rounds
 

@@ -164,6 +164,17 @@ FINAL_MODEL="${FINAL_MODEL_DIR}/${MODEL_NAME}.traineddata"
 cp "$TESSTRAIN_OUTPUT" "$FINAL_MODEL"
 log_success "Model installed: ${FINAL_MODEL}"
 
+# ─── Copy to API directory ────────────────────────────────────────────────────
+API_MODEL_DIR="${PROJECT_DIR}/ecg-meter-api/model"
+if [ -d "${PROJECT_DIR}/ecg-meter-api" ]; then
+    mkdir -p "$API_MODEL_DIR"
+    API_MODEL="${API_MODEL_DIR}/${MODEL_NAME}.traineddata"
+    cp "$FINAL_MODEL" "$API_MODEL"
+    log_success "Model copied to API: ${API_MODEL}"
+else
+    log_warn "ecg-meter-api/ directory not found, skipping API model copy"
+fi
+
 # ─── Quick smoke test ─────────────────────────────────────────────────────────
 log_section "Quick Smoke Test"
 
@@ -182,12 +193,18 @@ echo -e "  ${GREEN}Training complete!${NC}"
 echo "════════════════════════════════════════════════════════"
 echo ""
 echo "  Model: ${FINAL_MODEL}"
+if [ -f "${API_MODEL_DIR}/${MODEL_NAME}.traineddata" ]; then
+    echo "  API:   ${API_MODEL_DIR}/${MODEL_NAME}.traineddata"
+fi
 echo "  Log:   ${LOG_FILE}"
 echo ""
 echo "  Next steps:"
 echo "    Plot curves: python scripts/plot_training_curves.py --log ${LOG_FILE}"
 echo "    Evaluate:    python scripts/06_evaluate.py"
-echo "    Inference:   python scripts/07_inference.py --input raw_images/new/"
+echo "    Inference:   python scripts/07_inference.py --input eval_data/"
+if [ -d "${PROJECT_DIR}/ecg-meter-api" ]; then
+    echo "    Start API:   cd ecg-meter-api && python app.py"
+fi
 echo ""
 echo "  To install system-wide:"
 echo "    sudo cp ${FINAL_MODEL} ~/tessdata_best/"

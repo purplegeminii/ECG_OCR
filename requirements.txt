@@ -27,7 +27,7 @@ seaborn>=0.12.0
 pyyaml>=6.0
 python-dotenv>=1.0.0
 
-# Annotation (Label Studio)
+# Annotation (Label Studio requires Python <=3.11)
 label-studio>=1.7.0
 
 # Utilities

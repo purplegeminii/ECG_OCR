@@ -301,13 +301,20 @@ def prepare_training_data(
     logger.info(f"Copying {len(train_pairs)} pairs to {gt_out_dir} ...")
     copy_pairs_to_tesstrain(train_pairs, gt_out_dir)
 
-    # ── Save test set stems for 06_evaluate.py ────────────────────────────────
+    # ── Copy test pairs to eval_data/ for unbiased evaluation ─────────────────
+    eval_data_dir = Path(cfg.get("paths", {}).get("eval_data", "eval_data"))
+    eval_data_dir.mkdir(parents=True, exist_ok=True)
+    
+    logger.info(f"Copying {len(test_pairs)} test pairs to {eval_data_dir} ...")
+    copy_pairs_to_tesstrain(test_pairs, eval_data_dir)
+    
+    # Also save test set list for reference
     test_list_path = Path("results/test_set.txt")
     test_list_path.parent.mkdir(exist_ok=True)
     test_list_path.write_text(
         "\n".join(str(img_p) for img_p, _ in test_pairs) + "\n"
     )
-    logger.info(f"Test set image paths saved to {test_list_path}")
+    logger.info(f"Test set: {len(test_pairs)} images in {eval_data_dir}")
 
     logger.success("Training data preparation complete!")
     return {

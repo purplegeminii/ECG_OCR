@@ -135,14 +135,24 @@ class ECGOCREngine:
         """
         config = self.build_config()
 
+        # Prepare pytesseract kwargs
+        kwargs = {
+            "lang": self.lang,
+            "config": config,
+            "output_type": pytesseract.Output.DICT,
+        }
+        
+        # Add tessdata_dir via environment variable for better compatibility
+        import os
+        old_tessdata = None
+        if self.tessdata_dir:
+            kwargs["config"] = config.replace(f" --tessdata-dir {self.tessdata_dir}", "")
+            old_tessdata = os.environ.get("TESSDATA_PREFIX")
+            os.environ["TESSDATA_PREFIX"] = self.tessdata_dir
+        
         try:
             # Get detailed word-level data
-            data = pytesseract.image_to_data(
-                img,
-                lang=self.lang,
-                config=config,
-                output_type=pytesseract.Output.DICT,
-            )
+            data = pytesseract.image_to_data(img, **kwargs)
 
             # Filter words with confidence
             words = []
@@ -164,7 +174,7 @@ class ECGOCREngine:
             mean_conf = sum(confs) / len(confs) if confs else 0.0
             flagged = mean_conf < self.conf_threshold or bool(low_conf_words)
 
-            return {
+            result = {
                 "text": full_text,
                 "mean_confidence": round(mean_conf, 1),
                 "low_confidence_words": low_conf_words,
@@ -177,7 +187,7 @@ class ECGOCREngine:
             raise
         except Exception as e:
             logger.error(f"OCR error: {e}")
-            return {
+            result = {
                 "text": "",
                 "mean_confidence": 0.0,
                 "low_confidence_words": [],
@@ -185,6 +195,15 @@ class ECGOCREngine:
                 "word_count": 0,
                 "error": str(e),
             }
+        finally:
+            # Restore original TESSDATA_PREFIX
+            if self.tessdata_dir:
+                if old_tessdata is not None:
+                    os.environ["TESSDATA_PREFIX"] = old_tessdata
+                else:
+                    os.environ.pop("TESSDATA_PREFIX", None)
+        
+        return result
 
 
 # ─── Single image processing ──────────────────────────────────────────────────

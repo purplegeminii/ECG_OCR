@@ -208,6 +208,9 @@ __marimo__/
 
 config/config.yaml
 
+# raw_images/*
+!raw_images/.gitkeep
+
 preprocessed/*.tif
 
 ground_truth/*.gt.txt
@@ -227,3 +230,9 @@ eval_data/*
 
 corrections/*
 !corrections/.gitkeep
+
+logs/*
+!logs/.gitkeep
+
+label_studio_project/
+preprocessed_png/

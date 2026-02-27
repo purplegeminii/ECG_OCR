@@ -22,6 +22,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import sys
 import subprocess
 from pathlib import Path
@@ -71,9 +72,61 @@ def launch_label_studio(images_dir: str) -> None:
     config_file = project_dir / "labeling_config.xml"
     config_file.write_text(LABEL_STUDIO_CONFIG)
 
+    # Check if images are .tif (not supported by Label Studio)
+    tif_images = list(images_dir_path.glob("*.tif")) + list(images_dir_path.glob("*.tiff"))
+    
+    if tif_images:
+        logger.warning(f"Found {len(tif_images)} .tif images - Label Studio doesn't support TIFF format")
+        console.print("[yellow]Converting .tif → .png for Label Studio...[/yellow]")
+        
+        # Create PNG directory
+        png_dir = images_dir_path.parent / f"{images_dir_path.name}_png"
+        png_dir.mkdir(exist_ok=True)
+        
+        # Convert using ImageMagick mogrify
+        try:
+            # Copy tif files to png directory
+            for tif_file in tqdm(tif_images, desc="Copying TIFs"):
+                shutil.copy2(tif_file, png_dir / tif_file.name)
+            
+            # Convert to PNG in place
+            logger.info(f"Converting {len(tif_images)} images to PNG format...")
+            result = subprocess.run(
+                ["mogrify", "-format", "png", "*.tif"],
+                cwd=png_dir,
+                capture_output=True,
+                text=True,
+            )
+            
+            if result.returncode != 0:
+                logger.error(f"ImageMagick conversion failed: {result.stderr}")
+                console.print(
+                    "[red]ImageMagick not found or conversion failed.[/red]\n"
+                    "[yellow]Install ImageMagick:[/yellow] brew install imagemagick\n"
+                    "[yellow]Or use manual mode:[/yellow] python scripts/02_annotate.py --manual"
+                )
+                return
+            
+            # Remove .tif files from png directory
+            for tif_file in png_dir.glob("*.tif"):
+                tif_file.unlink()
+            for tif_file in png_dir.glob("*.tiff"):
+                tif_file.unlink()
+            
+            logger.success(f"Converted images saved to: {png_dir}")
+            images_dir_path = png_dir  # Use PNG directory for Label Studio
+            
+        except Exception as e:
+            logger.error(f"Conversion failed: {e}")
+            console.print(
+                "[red]Could not convert images to PNG.[/red]\n"
+                "[yellow]Use manual mode instead:[/yellow] python scripts/02_annotate.py --manual"
+            )
+            return
+
     console.print(Panel.fit(
         "[bold green]Label Studio Annotation Setup[/bold green]\n\n"
-        "1. Label Studio will open in your browser.\n"
+        "1. Label Studio will open in your browser at http://localhost:8080/\n"
         "2. Create a new project.\n"
         "3. Import images from: [cyan]" + str(images_dir_path) + "[/cyan]\n"
         "4. Use the labeling config from: [cyan]" + str(config_file) + "[/cyan]\n"
@@ -112,9 +165,19 @@ def convert_label_studio_export(
     converted, skipped = 0, 0
 
     for task in tqdm(data, desc="Converting annotations"):
-        # Get original filename
-        image_url = task.get("data", {}).get("image", "")
-        stem = Path(image_url.split("/")[-1]).stem
+        # Get original filename from file_upload or data fields
+        filename = task.get("file_upload", "")
+        if not filename:
+            # Fallback to data.image or data.ocr
+            image_url = task.get("data", {}).get("image", "") or task.get("data", {}).get("ocr", "")
+            filename = Path(image_url.split("/")[-1]).name if image_url else ""
+        
+        # Remove UUID prefix if present (Label Studio adds them)
+        # Format: "de5198c7-postpaidmeter_img1.png" -> "postpaidmeter_img1.png"
+        if "-" in filename and len(filename.split("-")[0]) == 8:
+            filename = "-".join(filename.split("-")[1:])
+        
+        stem = Path(filename).stem
 
         if not stem:
             skipped += 1
@@ -130,11 +193,13 @@ def convert_label_studio_export(
         text = ""
         for ann in annotations:
             for result in ann.get("result", []):
-                if result.get("type") == "textarea":
-                    values = result.get("value", {}).get("text", [])
-                    if values:
-                        text = values[0].strip()
+                if result.get("type") == "textarea" and result.get("from_name") == "transcription":
+                    text_array = result.get("value", {}).get("text", [])
+                    if text_array:
+                        text = text_array[0].strip()
                         break
+            if text:
+                break
 
         if not text:
             logger.warning(f"Empty transcription for: {stem}")

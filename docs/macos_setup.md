@@ -27,11 +27,19 @@ gem install unicode-scripts unicode-categories
 
 ## Python Environment
 
+**Python version:** 3.11 required for full feature set (Label Studio support)
+
 ```bash
-python3 -m venv .venv
+# Install Python 3.11 via Homebrew
+brew install python@3.11
+
+# Create virtual environment with Python 3.11
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+**Note:** Label Studio (GUI annotation tool) requires Python ≤3.11. If you use Python 3.12+, you'll need to remove `label-studio` from requirements.txt and use the built-in `--manual` annotation mode instead.
 
 ## tesstrain
 
