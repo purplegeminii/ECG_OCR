@@ -384,7 +384,7 @@ This project follows a structured OCR pipeline:
 Detailed diagrams are available in `/docs`.
 
 ### User Flow
-Shows how a user uses your ECG OCR system end-to-end.
+Shows how a user uses the ECG OCR system end-to-end.
 
 ```mermaid
 flowchart TD
