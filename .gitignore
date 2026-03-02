@@ -208,7 +208,7 @@ __marimo__/
 
 config/config.yaml
 
-# raw_images/*
+raw_images/*
 !raw_images/.gitkeep
 
 preprocessed/*.tif
