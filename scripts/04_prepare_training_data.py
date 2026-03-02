@@ -6,15 +6,16 @@ Prepare tesstrain-ready training data from preprocessed images + GT files.
 
 Files are written directly into tesstrain's expected directory structure:
 
-    tesstrain/data/<MODEL_NAME>-ground-truth/   ← all .tif + .gt.txt pairs
+    tesstrain/data/<MODEL_NAME>-ground-truth/   ← train + val pairs (tesstrain manages its own split)
+    eval_data/                                  ← held-out test pairs (for 06_evaluate.py)
 
-tesstrain's Makefile then handles LSTMF generation internally when
-05_run_training.sh calls `make training`. There is no separate
-training_data/ or eval_data/ directory — tesstrain owns that entirely.
+tesstrain's Makefile handles LSTMF generation internally when
+05_run_training.sh calls `make training`. The train/val split inside
+tesstrain/data/<MODEL_NAME>-ground-truth/ is managed by tesstrain via
+its RATIO variable (default 0.9 train / 0.1 eval).
 
-The train/eval split is recorded in results/test_set.txt so 06_evaluate.py
-knows which images were held out, but tesstrain itself manages the split
-via its RATIO variable (default 0.9 train / 0.1 eval).
+The ~10% test split is copied to eval_data/ and never seen during training,
+giving an unbiased evaluation via 06_evaluate.py and 08_iterative_correction.py.
 
 What this script does:
   1. Pairs .tif images with their .gt.txt ground truth files

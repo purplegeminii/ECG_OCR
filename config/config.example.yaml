@@ -56,7 +56,7 @@ paths:
   raw_images: raw_images/
   preprocessed: preprocessed/
   ground_truth: ground_truth/
-  training_data: training_data/
+  training_data: tesstrain/data/
   eval_data: eval_data/
   augmented: augmented/
   results: results/

@@ -4,7 +4,7 @@
 ==============
 Annotation helper for ECG Meter OCR ground truth labeling.
 
-Two modes:
+Four modes:
   1. `--launch`  : Start a Label Studio server for GUI annotation
   2. `--convert` : Convert Label Studio JSON export → .gt.txt files
   3. `--manual`  : Simple CLI tool to type ground truth for images quickly

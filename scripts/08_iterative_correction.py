@@ -52,15 +52,25 @@ except ImportError:
     HAS_JIWER = False
 
 
+def _edit_distance(s1: str, s2: str) -> int:
+    """Levenshtein edit distance between two strings."""
+    m, n = len(s1), len(s2)
+    dp = list(range(n + 1))
+    for i in range(1, m + 1):
+        prev = dp[0]
+        dp[0] = i
+        for j in range(1, n + 1):
+            temp = dp[j]
+            dp[j] = prev if s1[i-1] == s2[j-1] else 1 + min(prev, dp[j], dp[j-1])
+            prev = temp
+    return dp[n]
+
+
 def basic_cer(ground_truth: str, prediction: str) -> float:
-    """Calculate basic Character Error Rate for fallback when jiwer unavailable."""
+    """Calculate Character Error Rate (Levenshtein-based) for fallback when jiwer unavailable."""
     if not ground_truth:
-        return 1.0
-    
-    s1, s2 = ground_truth.lower(), prediction.lower()
-    matches = sum(c1 == c2 for c1, c2 in zip(s1, s2))
-    errors = abs(len(s1) - len(s2)) + (len(s1) - matches)
-    return errors / len(s1) if s1 else 0.0
+        return 0.0 if not prediction else 1.0
+    return _edit_distance(ground_truth, prediction) / len(ground_truth)
 
 
 console = Console()
@@ -218,7 +228,8 @@ def trigger_incremental_retrain(
     Add corrections to training set and trigger retraining.
     """
     corrections_path = Path(corrections_dir)
-    train_dir = Path(cfg.get("paths", {}).get("training_data", "training_data/"))
+    model_name = cfg.get("model", {}).get("name", "ecg_meter")
+    train_dir = Path(cfg.get("paths", {}).get("training_data", "tesstrain/data/")) / f"{model_name}-ground-truth"
 
     # Copy corrections to training set
     images = list_images(corrections_path)
