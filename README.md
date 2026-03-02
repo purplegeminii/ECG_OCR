@@ -115,10 +115,13 @@ make help          # Print all available targets
 |--------|-------------|
 | `make setup` | Install all system + Python dependencies |
 | `make preprocess` | Run `01_preprocess.py` on `raw_images/` → `preprocessed/` |
+| `make preprocess-single` | Preprocess a single image (prompts for path) |
+| `make preprocess-debug` | Preprocess with debug visualisation |
 | `make annotate` | Launch CLI annotation tool (`02_annotate.py --manual`) |
 | `make annotate-studio` | Launch Label Studio GUI for annotation |
 | `make validate-gt` | Validate all `.gt.txt` files for common errors |
 | `make augment` | Run `03_augment.py` with factor 5 |
+| `make augment-preview` | Preview augmentations on a single image |
 | `make prepare` | Run `04_prepare_training_data.py` |
 | `make stats` | Print dataset statistics without copying any files |
 | `make train` | Run `05_run_training.sh` |
@@ -126,13 +129,19 @@ make help          # Print all available targets
 | `make evaluate` | Run `06_evaluate.py` on `eval_data/` |
 | `make evaluate-compare` | Evaluate and compare against the base `eng` model |
 | `make infer` | Run `07_inference.py` on `raw_images/` and save CSV output |
-| `make correct` | Run 3 rounds of iterative error correction |
-| `make find-errors` | Identify high-CER samples (threshold 0.10) |
+| `make infer-json` | Same as `infer` but output JSON |
+| `make add-eval` | Preprocess and add a single image to `eval_data/` (prompts for path) |
+| `make add-eval-dir` | Preprocess and add a directory of images to `eval_data/` (prompts for dir) |
+| `make correct` | Run 3 rounds of iterative error correction and trigger retraining |
+| `make find-errors` | Report high-CER samples (threshold 0.10) without correcting |
 | `make plot-curves` | Plot CER/WER curves from the latest training log |
 | `make test` | Run the test suite with pytest |
 | `make test-cov` | Run tests with HTML coverage report |
 | `make full-pipeline` | Shortcut: preprocess → augment → prepare → train → evaluate |
 | `make clean` | Remove generated files (raw images + ground truth are preserved) |
+| `make clean-generated` | Remove `preprocessed/`, `augmented/`, `tesstrain/data/` |
+| `make clean-models` | Remove model checkpoints (final `.traineddata` preserved) |
+| `make clean-results` | Remove everything in `results/` |
 
 ---
 

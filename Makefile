@@ -3,8 +3,20 @@
 # Convenient shortcuts for common pipeline operations
 # =============================================================================
 
-.PHONY: help setup preprocess annotate augment prepare train evaluate infer \
-        test clean full-pipeline
+.PHONY: help setup \
+        preprocess preprocess-single preprocess-debug \
+        annotate annotate-studio validate-gt \
+        augment augment-preview \
+        prepare stats \
+        train train-resume \
+        evaluate evaluate-compare \
+        infer infer-json \
+        add-eval add-eval-dir \
+        correct find-errors \
+        plot-curves \
+        test test-cov \
+        full-pipeline \
+        clean clean-generated clean-models clean-results
 
 PYTHON    := python3
 SCRIPTS   := scripts/
@@ -32,8 +44,11 @@ help:
 	@echo "  make test           Run unit tests"
 	@echo "  make validate-gt    Validate ground truth files"
 	@echo "  make plot-curves    Plot training CER curves"
-	@echo "  make correct        Run iterative correction loop"
+	@echo "  make correct        Run iterative correction loop (3 rounds + retrain)"
+	@echo "  make find-errors    Report high-CER samples without correcting"
 	@echo "  make stats          Show dataset statistics"
+	@echo "  make add-eval       Add a single image to eval_data/ interactively"
+	@echo "  make add-eval-dir   Add a directory of images to eval_data/ interactively"
 	@echo "  make clean          Remove generated files (keep raw images)"
 	@echo ""
 	@echo "Full pipeline:"
@@ -128,32 +143,56 @@ evaluate-compare:
 		--test-dir eval_data/ \
 		--gt-dir ground_truth/ \
 		--output results/ \
-		--compare
+		--compare \
+		--config $(CONFIG)
 
 # ─── Step 7: Inference ───────────────────────────────────────────────────────
 infer:
 	$(PYTHON) $(SCRIPTS)07_inference.py \
 		--input raw_images/ \
 		--output results/ \
-		--format csv
+		--format csv \
+		--config $(CONFIG)
 
 infer-json:
 	$(PYTHON) $(SCRIPTS)07_inference.py \
 		--input raw_images/ \
 		--output results/ \
-		--format json
+		--format json \
+		--config $(CONFIG)
 
 # ─── Iterative correction ────────────────────────────────────────────────────
 correct:
 	$(PYTHON) $(SCRIPTS)08_iterative_correction.py \
 		--eval-dir eval_data/ \
 		--gt-dir ground_truth/ \
-		--rounds 3
+		--corrections corrections/ \
+		--rounds 3 \
+		--retrain \
+		--config $(CONFIG)
 
 find-errors:
 	$(PYTHON) $(SCRIPTS)08_iterative_correction.py \
 		--find-errors \
-		--threshold 0.10
+		--eval-dir eval_data/ \
+		--gt-dir ground_truth/ \
+		--threshold 0.10 \
+		--config $(CONFIG)
+
+# ─── Add to eval data ─────────────────────────────────────────────────────────
+add-eval:
+	@read -p "Image path: " path; \
+	$(PYTHON) $(SCRIPTS)add_to_eval_data.py \
+		--image "$$path" \
+		--interactive \
+		--config $(CONFIG)
+
+add-eval-dir:
+	@read -p "Directory: " dir; \
+	$(PYTHON) $(SCRIPTS)add_to_eval_data.py \
+		--input "$$dir" \
+		--interactive \
+		--config $(CONFIG)
 
 # ─── Plots ───────────────────────────────────────────────────────────────────
 plot-curves:
