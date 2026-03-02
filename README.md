@@ -9,12 +9,14 @@ meter reading images.
 ## Table of Contents
 1. [Project Structure](#project-structure)
 2. [Quick Start](#quick-start)
-3. [Pipeline Phases](#pipeline-phases)
-4. [Configuration](#configuration)
-5. [Scripts Reference](#scripts-reference)
-6. [Evaluation](#evaluation)
-7. [Troubleshooting](#troubleshooting)
-8. [System Overview](#-system-overview)
+3. [Makefile Reference](#makefile-reference)
+4. [Pipeline Phases](#pipeline-phases)
+5. [Configuration](#configuration)
+6. [Scripts Reference](#scripts-reference)
+7. [Notebooks](#notebooks)
+8. [Evaluation](#evaluation)
+9. [Troubleshooting](#troubleshooting)
+10. [System Overview](#-system-overview)
 
 ---
 
@@ -22,6 +24,7 @@ meter reading images.
 
 ```
 ecg-ocr-project/
+├── Makefile             # Convenient shortcuts for all pipeline operations (make help)
 ├── raw_images/          # Original meter reading photos
 ├── preprocessed/        # Cleaned/deskewed images ready for OCR
 ├── ground_truth/        # .gt.txt label files (paired with .tif)
@@ -42,7 +45,8 @@ ecg-ocr-project/
 ├── scripts/             # All pipeline scripts
 ├── config/              # YAML configs
 ├── logs/                # Training logs, CER curves
-├── notebooks/           # Jupyter analysis notebooks
+├── notebooks/
+│   └── ecg_ocr_analysis.ipynb  # Interactive dataset analysis & preprocessing visualisation
 ├── tests/               # Unit tests
 └── docs/                # Additional documentation
 ```
@@ -96,6 +100,39 @@ python scripts/08_iterative_correction.py --corrections corrections/ --retrain -
 # 11. Run inference on new images
 python scripts/07_inference.py --input raw_images/new/ --output results/
 ```
+
+---
+
+## Makefile Reference
+
+The `Makefile` wraps every pipeline step so you don't need to remember long command strings.
+
+```bash
+make help          # Print all available targets
+```
+
+| Target | Description |
+|--------|-------------|
+| `make setup` | Install all system + Python dependencies |
+| `make preprocess` | Run `01_preprocess.py` on `raw_images/` → `preprocessed/` |
+| `make annotate` | Launch CLI annotation tool (`02_annotate.py --manual`) |
+| `make annotate-studio` | Launch Label Studio GUI for annotation |
+| `make validate-gt` | Validate all `.gt.txt` files for common errors |
+| `make augment` | Run `03_augment.py` with factor 5 |
+| `make prepare` | Run `04_prepare_training_data.py` |
+| `make stats` | Print dataset statistics without copying any files |
+| `make train` | Run `05_run_training.sh` |
+| `make train-resume` | Resume training from the last checkpoint |
+| `make evaluate` | Run `06_evaluate.py` on `eval_data/` |
+| `make evaluate-compare` | Evaluate and compare against the base `eng` model |
+| `make infer` | Run `07_inference.py` on `raw_images/` and save CSV output |
+| `make correct` | Run 3 rounds of iterative error correction |
+| `make find-errors` | Identify high-CER samples (threshold 0.10) |
+| `make plot-curves` | Plot CER/WER curves from the latest training log |
+| `make test` | Run the test suite with pytest |
+| `make test-cov` | Run tests with HTML coverage report |
+| `make full-pipeline` | Shortcut: preprocess → augment → prepare → train → evaluate |
+| `make clean` | Remove generated files (raw images + ground truth are preserved) |
 
 ---
 
@@ -273,6 +310,29 @@ ocr:
 | `add_to_eval_data.py` | Add new images to eval_data/ for testing |
 | `install_dependencies.sh` | System + Python dependency installer |
 | `plot_training_curves.py` | Visualise CER/WER over training |
+
+---
+
+## Notebooks
+
+### `notebooks/ecg_ocr_analysis.ipynb`
+
+An interactive Jupyter notebook for exploring the dataset, visualising the
+preprocessing pipeline, and inspecting OCR results.
+
+```bash
+# Open in VS Code
+code notebooks/ecg_ocr_analysis.ipynb
+
+# Or launch Jupyter in the browser
+jupyter lab notebooks/ecg_ocr_analysis.ipynb
+```
+
+**What it covers:**
+- Dataset overview — image counts across `preprocessed/`, `augmented/`, `ground_truth/`, and `tesstrain/data/ecg_meter-ground-truth/`
+- Step-by-step preprocessing visualisation (resize → deskew → perspective correction → threshold → denoise → ROI)
+- Ground truth text distribution and length analysis
+- OCR results comparison across different pipeline stages
 
 ---
 
