@@ -218,7 +218,7 @@ full-pipeline: preprocess augment prepare train evaluate
 
 # ─── Clean ───────────────────────────────────────────────────────────────────
 clean-generated:
-	rm -rf preprocessed/* augmented/* tesstrain/data/
+	find preprocessed/ augmented/ tesstrain/data/ -mindepth 1 -not -name '.gitkeep' -depth -delete 2>/dev/null || true
 	@echo "Cleaned generated files (raw_images and ground_truth preserved)"
 
 clean-models:
@@ -226,7 +226,7 @@ clean-models:
 	@echo "Cleaned model checkpoints (final models preserved)"
 
 clean-results:
-	rm -rf results/*
+	find results/ -mindepth 1 -not -name '.gitkeep' -depth -delete 2>/dev/null || true
 	@echo "Cleaned results"
 
 clean: clean-generated clean-results
