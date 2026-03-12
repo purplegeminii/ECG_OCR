@@ -42,6 +42,15 @@ def parse_training_log(log_path: str) -> dict:
     Parse Tesseract LSTM training log and extract metrics.
 
     Handles log format from both lstmtraining and tesstrain output.
+
+    Actual log format (tesstrain/lstmtraining):
+      At iteration 99/100/201, mean rms=5.627%, delta=44.696%, BCER train=95.636%,
+        BWER train=100.000%, skip ratio=101.000%, New best BCER = 95.636 wrote checkpoint.
+      At iteration 420/500/1007, ..., New best BCER = 71.356 wrote best model:...
+
+    Note: lstmtraining uses \\r to overwrite terminal progress lines, so the raw
+    file may contain embedded \\r characters within newline-terminated lines.
+    We split each raw line on \\r and take the last non-empty segment.
     """
     iterations   = []
     train_cer    = []
@@ -50,9 +59,8 @@ def parse_training_log(log_path: str) -> dict:
     best_iters   = []
     rms_values   = []
 
-    # Patterns
-    # "At iteration 1000, Mean rms=1.23%, delta=0.45%, BCER train=8.90%, BCER eval=7.65%..."
-    # Also handles "At iteration 92/700/700, mean rms=..." format
+    # "At iteration 99/100/201, mean rms=5.627%, delta=44.696%, BCER train=95.636%..."
+    # Also handles plain "At iteration 1000, Mean rms=..." (older lstmtraining format)
     iter_pattern = re.compile(
         r"At iteration\s+(?:\d+/)?(\d+)(?:/\d+)?,\s*"
         r"[Mm]ean rms=([\d.]+)%,\s*"
@@ -61,21 +69,26 @@ def parse_training_log(log_path: str) -> dict:
         r"(?:,\s*BCER eval=([\d.]+)%)?"
     )
 
-    # "BEST model written to ... with mean error rate of 6.789%"
-    # Also handles "New best BCER = 6.789" format
+    # "New best BCER = 95.636" embedded inline on the same At-iteration line
+    new_best_inline = re.compile(r"New best BCER\s*=\s*([\d.]+)")
+
+    # Older format: "BEST model written to ... with mean error rate of 6.789% at iteration N"
     best_pattern = re.compile(
         r"BEST model written.*?with mean error rate of ([\d.]+)%\s+at iteration\s+(\d+)"
     )
-    new_best_pattern = re.compile(
-        r"At iteration\s+(?:\d+/)?(\d+)(?:/\d+)?,.*?New best BCER\s*=\s*([\d.]+)"
-    )
 
-    # tesstrain style: "0.234  [1000/10000]"
-    tesstrain_pattern = re.compile(r"([\d.]+)\s+\[(\d+)/\d+\]")
+    # tesstrain compact style: "0.234  [1000/10000]" — used as fallback only
+    tesstrain_pattern = re.compile(r"^([\d.]+)\s+\[(\d+)/\d+\]$")
 
     with open(log_path, encoding="utf-8", errors="ignore") as f:
-        for line in f:
-            line = line.strip()
+        for raw_line in f:
+            # lstmtraining writes progress via \r (carriage return) to overwrite the
+            # current terminal line.  When captured to a file each physical \n-line
+            # may contain multiple \r-separated "frames"; use the last non-empty one.
+            segments = [s.strip() for s in raw_line.split("\r") if s.strip()]
+            line = segments[-1] if segments else ""
+            if not line:
+                continue
 
             # Standard lstmtraining output
             m = iter_pattern.search(line)
@@ -90,27 +103,23 @@ def parse_training_log(log_path: str) -> dict:
                 train_cer.append(t_cer)
                 if e_cer is not None:
                     eval_cer.append((iter_n, e_cer))
+
+                # "New best BCER = X" is on the *same* line — extract it here
+                # (checking after iter_pattern so we already have iter_n)
+                bm = new_best_inline.search(line)
+                if bm:
+                    best_cer.append(float(bm.group(1)))
+                    best_iters.append(iter_n)
                 continue
 
-            # Best model line
+            # Older "BEST model written" format (separate line)
             m = best_pattern.search(line)
             if m:
-                cer  = float(m.group(1))
-                itr  = int(m.group(2))
-                best_cer.append(cer)
-                best_iters.append(itr)
+                best_cer.append(float(m.group(1)))
+                best_iters.append(int(m.group(2)))
                 continue
 
-            # New best BCER format
-            m = new_best_pattern.search(line)
-            if m:
-                itr = int(m.group(1))
-                cer = float(m.group(2))
-                best_cer.append(cer)
-                best_iters.append(itr)
-                continue
-
-            # tesstrain compact output
+            # tesstrain compact output (fallback — only when no standard data yet)
             m = tesstrain_pattern.search(line)
             if m and not iterations:
                 cer = float(m.group(1)) * 100
@@ -165,17 +174,17 @@ def plot_training_curves(data: dict, output_dir: str, log_name: str = "training"
     # Target line
     ax1.axhline(y=2.0, color="orange", linestyle="--", alpha=0.7, label="Target CER 2%")
 
-    ax1.set_ylabel("Character Error Rate (%)")
-    ax1.legend(loc="upper right")
-    ax1.grid(True, alpha=0.3)
-    ax1.set_ylim(bottom=0)
-
-    # Smooth trend line
+    # Smooth trend line — must be added before legend() so it appears in the legend
     if len(t_cer) > 10:
         window = max(5, len(t_cer) // 20)
         smoothed = np.convolve(t_cer, np.ones(window)/window, mode="valid")
         smooth_iters = iters[window-1:][:len(smoothed)]
         ax1.plot(smooth_iters, smoothed, "b--", linewidth=2, alpha=0.5, label=f"Smoothed (w={window})")
+
+    ax1.set_ylabel("Character Error Rate (%)")
+    ax1.legend(loc="upper right")
+    ax1.grid(True, alpha=0.3)
+    ax1.set_ylim(bottom=0)
 
     # ── Plot 2: RMS error ─────────────────────────────────────────────────────
     ax2 = axes[1]

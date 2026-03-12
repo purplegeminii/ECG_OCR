@@ -92,7 +92,7 @@ def launch_label_studio(images_dir: str) -> None:
             # Convert to PNG in place
             logger.info(f"Converting {len(tif_images)} images to PNG format...")
             result = subprocess.run(
-                ["mogrify", "-format", "png", "*.tif"],
+                ["mogrify", "-format", "png"] + [str(f.name) for f in tif_images],
                 cwd=png_dir,
                 capture_output=True,
                 text=True,

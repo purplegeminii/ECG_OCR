@@ -4,25 +4,30 @@
 ===========================
 Prepare tesstrain-ready training data from preprocessed images + GT files.
 
-Files are written directly into tesstrain's expected directory structure:
+The dataset is split according to config.yaml (training.split):
 
-    tesstrain/data/<MODEL_NAME>-ground-truth/   ← train + val pairs (tesstrain manages its own split)
-    eval_data/                                  ← held-out test pairs (for 06_evaluate.py)
+    80 % → train   ┐
+    10 % → val     ┘ both copied to tesstrain/data/<MODEL_NAME>-ground-truth/
+    10 % → test      copied to eval_data/ only (never seen during training)
+
+tesstrain's Makefile receives the combined train+val pool (90 %) and uses its
+internal RATIO variable to perform its own train/eval partition; the exact
+boundary it draws within that pool does not affect our held-out test set.
 
 tesstrain's Makefile handles LSTMF generation internally when
-05_run_training.sh calls `make training`. The train/val split inside
-tesstrain/data/<MODEL_NAME>-ground-truth/ is managed by tesstrain via
-its RATIO variable (default 0.9 train / 0.1 eval).
+05_run_training.sh calls `make training`.
 
-The ~10% test split is copied to eval_data/ and never seen during training,
+The 10 % test split is copied to eval_data/ and never seen during training,
 giving an unbiased evaluation via 06_evaluate.py and 08_iterative_correction.py.
 
 What this script does:
   1. Pairs .tif images with their .gt.txt ground truth files
   2. Validates each pair (image quality, GT content)
-  3. Copies files into tesstrain/data/<MODEL_NAME>-ground-truth/
-  4. Records the held-out test stems in results/test_set.txt
-  5. Reports dataset statistics
+  3. Splits pairs into train / val / test using config ratios (80/10/10)
+  4. Copies train + val pairs into tesstrain/data/<MODEL_NAME>-ground-truth/
+  5. Copies test pairs into eval_data/
+  6. Records the held-out test stems in results/test_set.txt
+  7. Reports dataset statistics
 
 Usage:
     python scripts/04_prepare_training_data.py
@@ -200,10 +205,13 @@ def prepare_training_data(
     stats_only: bool = False,
 ) -> dict:
     """
-    Full pipeline: validate → copy into tesstrain/data/<MODEL>-ground-truth/
+    Full pipeline: validate → split (80/10/10) → copy to destinations.
 
-    tesstrain owns the train/eval split. We only record held-out test stems
-    separately in results/test_set.txt for use by 06_evaluate.py.
+    train + val (90 %) → tesstrain/data/<MODEL>-ground-truth/
+    test        (10 %) → eval_data/  +  results/test_set.txt
+
+    tesstrain re-splits the train+val pool internally via its RATIO variable.
+    The test set is never seen during training and is used by 06_evaluate.py.
     """
     source_path    = Path(source_dir)
     gt_path        = Path(gt_dir)
@@ -211,8 +219,10 @@ def prepare_training_data(
 
     model_name  = cfg.get("model", {}).get("name", "ecg_meter")
     seed        = cfg.get("training", {}).get("random_seed", 42)
-    test_ratio  = 1.0 - cfg.get("training", {}).get("split", {}).get("train", 0.80) \
-                      - cfg.get("training", {}).get("split", {}).get("validation", 0.10)
+    split_cfg   = cfg.get("training", {}).get("split", {})
+    train_ratio = split_cfg.get("train",      0.80)
+    val_ratio   = split_cfg.get("validation", 0.10)
+    test_ratio  = split_cfg.get("test",       0.10)
     min_samples = cfg.get("training", {}).get("min_samples_for_training", 100)
 
     # tesstrain ground-truth directory convention
@@ -256,42 +266,48 @@ def prepare_training_data(
             f"Consider collecting more images or increasing augmentation factor."
         )
 
-    # ── Carve out a test set (for 06_evaluate.py) before handing to tesstrain ─
-    # tesstrain handles its own train/eval split from whatever we give it.
-    # We just hold back ~10% as a completely unseen test set.
+    # ── Split: train (80%) / val (10%) / test (10%) ──────────────────────────
+    # train + val go to tesstrain; tesstrain re-splits them internally via RATIO.
+    # test is held back completely for 06_evaluate.py.
     random.seed(seed)
     shuffled = list(valid_pairs)
     random.shuffle(shuffled)
-    n_test   = max(1, int(len(shuffled) * test_ratio))
-    test_pairs  = shuffled[:n_test]
-    train_pairs = shuffled[n_test:]
+    n = len(shuffled)
+    n_test = max(1, round(n * test_ratio))
+    n_val  = max(1, round(n * val_ratio))
+    # Ensure splits don't exceed total
+    n_test = min(n_test, n - 2)
+    n_val  = min(n_val,  n - n_test - 1)
 
-    # Fake val count for stats display (tesstrain handles real split internally)
-    val_display = int(len(train_pairs) * 0.10)
-    train_display = len(train_pairs) - val_display
+    test_pairs  = shuffled[:n_test]
+    val_pairs   = shuffled[n_test:n_test + n_val]
+    train_pairs = shuffled[n_test + n_val:]
 
     if stats_only:
-        print_dataset_stats(valid_pairs, train_pairs, test_pairs, test_pairs)
+        print_dataset_stats(valid_pairs, train_pairs, val_pairs, test_pairs)
         console.print(
-            f"\n[dim]Note: tesstrain manages its own train/eval split from "
-            f"the {len(train_pairs)} non-test pairs. "
-            f"The {n_test} test pairs are held back for 06_evaluate.py.[/dim]"
+            f"\n[dim]train + val ({len(train_pairs) + len(val_pairs)} pairs) will go to "
+            f"tesstrain/data/{model_name}-ground-truth/. "
+            f"tesstrain re-splits them internally via its RATIO variable.\n"
+            f"{len(test_pairs)} test pairs are held back for 06_evaluate.py → eval_data/[/dim]"
         )
         return {
             "total": len(valid_pairs),
-            "to_tesstrain": len(train_pairs),
-            "held_out_test": n_test,
+            "train": len(train_pairs),
+            "val": len(val_pairs),
+            "held_out_test": len(test_pairs),
         }
 
-    print_dataset_stats(valid_pairs, train_pairs, test_pairs, test_pairs)
+    print_dataset_stats(valid_pairs, train_pairs, val_pairs, test_pairs)
     console.print(
         f"\n[cyan]tesstrain ground-truth dir:[/cyan] {gt_out_dir}\n"
-        f"[dim]tesstrain will internally split these {len(train_pairs)} pairs "
-        f"into ~90% train / ~10% eval via its RATIO variable.[/dim]\n"
-        f"[dim]{n_test} pairs held back as unseen test set → results/test_set.txt[/dim]"
+        f"[dim]Copying train ({len(train_pairs)}) + val ({len(val_pairs)}) = "
+        f"{len(train_pairs) + len(val_pairs)} pairs. "
+        f"tesstrain will re-split them internally via its RATIO variable.[/dim]\n"
+        f"[dim]{len(test_pairs)} pairs held back as unseen test set → eval_data/ + results/test_set.txt[/dim]"
     )
 
-    # ── Copy training pairs into tesstrain/data/<model>-ground-truth/ ─────────
+    # ── Copy train + val pairs into tesstrain/data/<model>-ground-truth/ ──────
     if not tesstrain_path.exists():
         logger.error(
             f"tesstrain submodule not found at {tesstrain_path}. "
@@ -299,8 +315,9 @@ def prepare_training_data(
         )
         return {}
 
-    logger.info(f"Copying {len(train_pairs)} pairs to {gt_out_dir} ...")
-    copy_pairs_to_tesstrain(train_pairs, gt_out_dir)
+    tesstrain_pairs = train_pairs + val_pairs
+    logger.info(f"Copying {len(tesstrain_pairs)} pairs (train+val) to {gt_out_dir} ...")
+    copy_pairs_to_tesstrain(tesstrain_pairs, gt_out_dir)
 
     # ── Copy test pairs to eval_data/ for unbiased evaluation ─────────────────
     eval_data_dir = Path(cfg.get("paths", {}).get("eval_data", "eval_data"))
@@ -321,8 +338,10 @@ def prepare_training_data(
     return {
         "total": len(valid_pairs),
         "invalid": len(invalid),
-        "to_tesstrain": len(train_pairs),
-        "held_out_test": n_test,
+        "train": len(train_pairs),
+        "val": len(val_pairs),
+        "to_tesstrain": len(tesstrain_pairs),
+        "held_out_test": len(test_pairs),
         "ground_truth_dir": str(gt_out_dir),
     }
 

@@ -173,7 +173,7 @@ cython_debug/
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
 
 # Abstra
 # Abstra is an AI-powered process automation framework.
@@ -206,6 +206,9 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+# Mac
+.DS_Store
+
 config/config.yaml
 
 raw_images/*
@@ -236,3 +239,8 @@ logs/*
 
 label_studio_project/
 preprocessed_png/
+
+output.txt
+
+ecg-meter-api/model/*
+!ecg-meter-api/model/.gitkeep

@@ -46,31 +46,51 @@ parse_yaml_value() {
         | sed 's/.*: //' | sed 's/#.*//' | tr -d '"' | tr -d "'" | xargs
 }
 
-MODEL_NAME=$(parse_yaml_value "name"           config/config.yaml); MODEL_NAME="${MODEL_NAME:-ecg_meter}"
-BASE_MODEL=$(parse_yaml_value "base_model"     config/config.yaml); BASE_MODEL="${BASE_MODEL:-eng}"
-MAX_ITER=$(parse_yaml_value   "max_iterations" config/config.yaml); MAX_ITER="${MAX_ITER:-10000}"
-LR=$(parse_yaml_value         "learning_rate"  config/config.yaml); LR="${LR:-0.0001}"
+MODEL_NAME=$(parse_yaml_value        "name"              config/config.yaml); MODEL_NAME="${MODEL_NAME:-ecg_meter}"
+BASE_MODEL=$(parse_yaml_value        "base_model"        config/config.yaml); BASE_MODEL="${BASE_MODEL:-eng}"
+MAX_ITER=$(parse_yaml_value          "max_iterations"    config/config.yaml); MAX_ITER="${MAX_ITER:-5000}"
+LR=$(parse_yaml_value                "learning_rate"     config/config.yaml); LR="${LR:-0.00001}"
+TARGET_CER=$(parse_yaml_value        "target_cer"        config/config.yaml); TARGET_CER="${TARGET_CER:-0.02}"
+CHECKPOINT_EVERY=$(parse_yaml_value  "checkpoint_every"  config/config.yaml); CHECKPOINT_EVERY="${CHECKPOINT_EVERY:-1000}"
+TESSDATA_BEST_CFG=$(parse_yaml_value "tessdata_best_dir" config/config.yaml); TESSDATA_BEST_CFG="${TESSDATA_BEST_CFG:-~/tessdata_best}"
+VAL_RATIO=$(parse_yaml_value         "validation"        config/config.yaml); VAL_RATIO="${VAL_RATIO:-0.10}"
+PSM=$(parse_yaml_value               "psm"               config/config.yaml); PSM="${PSM:-7}"
+OEM=$(parse_yaml_value               "oem"               config/config.yaml); OEM="${OEM:-1}"
+TRAINING_DATA_DIR=$(parse_yaml_value "training_data"     config/config.yaml); TRAINING_DATA_DIR="${TRAINING_DATA_DIR:-tesstrain/data/}"
+MODELS_DIR=$(parse_yaml_value        "models"            config/config.yaml); MODELS_DIR="${MODELS_DIR:-models/}"
+LOGS_DIR_CFG=$(parse_yaml_value      "logs"              config/config.yaml); LOGS_DIR_CFG="${LOGS_DIR_CFG:-logs/}"
+
+# Expand ~ in tessdata_best_dir
+TESSDATA_BEST_CFG="${TESSDATA_BEST_CFG/#\~/$HOME}"
+
+# tesstrain RATIO = training fraction within the train+val pool (1 - val ratio)
+RATIO=$(awk "BEGIN {printf \"%.2f\", 1 - ${VAL_RATIO}}")
 
 # ─── CLI overrides ────────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --iterations) MAX_ITER="$2";  shift 2 ;;
-        --lr)         LR="$2";        shift 2 ;;
-        --model)      MODEL_NAME="$2"; shift 2 ;;
+        --iterations) MAX_ITER="$2";       shift 2 ;;
+        --lr)         LR="$2";             shift 2 ;;
+        --model)      MODEL_NAME="$2";     shift 2 ;;
+        --psm)        PSM="$2";            shift 2 ;;
+        --oem)        OEM="$2";            shift 2 ;;
+        --target-cer) TARGET_CER="$2";     shift 2 ;;
+        --checkpoint) CHECKPOINT_EVERY="$2"; shift 2 ;;
         *) log_warn "Unknown argument: $1"; shift ;;
     esac
 done
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 PROJECT_DIR="$(pwd)"
-TESSTRAIN_DIR="${PROJECT_DIR}/tesstrain"
-GT_DIR="${TESSTRAIN_DIR}/data/${MODEL_NAME}-ground-truth"
-FINAL_MODEL_DIR="${PROJECT_DIR}/models/${MODEL_NAME}/tessdata"
-LOGS_DIR="${PROJECT_DIR}/logs"
+TESSTRAIN_DIR="${PROJECT_DIR}/${TRAINING_DATA_DIR%%/*}"  # first component: tesstrain/data/ → tesstrain
+GT_DIR="${PROJECT_DIR}/${TRAINING_DATA_DIR%/}/${MODEL_NAME}-ground-truth"
+FINAL_MODEL_DIR="${PROJECT_DIR}/${MODELS_DIR%/}/${MODEL_NAME}/tessdata"
+LOGS_DIR="${PROJECT_DIR}/${LOGS_DIR_CFG%/}"
 
 # Locate tessdata_best (where eng.traineddata lives for fine-tuning)
 TESSDATA_BEST=""
 for candidate in \
+    "$TESSDATA_BEST_CFG" \
     "/usr/share/tesseract-ocr/5/tessdata_best" \
     "/usr/share/tesseract-ocr/4.00/tessdata_best" \
     "/usr/local/share/tessdata" \
@@ -99,13 +119,18 @@ GT_COUNT=$(find "$GT_DIR" -name "*.tif" | wc -l)
 [ -n "$TESSDATA_BEST" ] || log_error \
     "Could not find ${BASE_MODEL}.traineddata in any tessdata_best location.\n  Run: bash scripts/install_dependencies.sh"
 
-log_info "Model name:      ${MODEL_NAME}"
-log_info "Base model:      ${BASE_MODEL}"
-log_info "Max iterations:  ${MAX_ITER}"
-log_info "Learning rate:   ${LR}"
-log_info "Training images: ${GT_COUNT}"
-log_info "tessdata_best:   ${TESSDATA_BEST}"
-log_info "Ground-truth:    ${GT_DIR}"
+log_info "Model name:        ${MODEL_NAME}"
+log_info "Base model:        ${BASE_MODEL}"
+log_info "Max iterations:    ${MAX_ITER}"
+log_info "Learning rate:     ${LR}"
+log_info "Target CER:        ${TARGET_CER}"
+log_info "Checkpoint every:  ${CHECKPOINT_EVERY}"
+log_info "PSM:               ${PSM}"
+log_info "OEM:               ${OEM}"
+log_info "Val ratio:         ${VAL_RATIO}  (tesstrain RATIO=${RATIO})"
+log_info "Training images:   ${GT_COUNT}"
+log_info "tessdata_best:     ${TESSDATA_BEST}"
+log_info "Ground-truth:      ${GT_DIR}"
 
 if [ "$GT_COUNT" -lt 50 ]; then
     log_warn "Only ${GT_COUNT} images. Recommend ≥100 for meaningful fine-tuning."
@@ -142,7 +167,11 @@ fi
     GROUND_TRUTH_DIR="$GT_DIR" \
     MAX_ITERATIONS="$MAX_ITER" \
     LEARNING_RATE="$LR" \
-    PSM=6 \
+    TARGET_ERROR_RATE="$TARGET_CER" \
+    CHECKPOINT_ITERATIONS="$CHECKPOINT_EVERY" \
+    RATIO="$RATIO" \
+    PSM="$PSM" \
+    OEM="$OEM" \
     2>&1 | tee "$LOG_FILE"
 
 log_success "tesstrain finished"
@@ -184,7 +213,8 @@ if [ -n "$SAMPLE_TIF" ]; then
     tesseract "$SAMPLE_TIF" stdout \
         --tessdata-dir "$FINAL_MODEL_DIR" \
         -l "$MODEL_NAME" \
-        --psm 6 2>/dev/null || true
+        --psm "$PSM" \
+        --oem "$OEM" 2>/dev/null || true
 fi
 
 echo ""
